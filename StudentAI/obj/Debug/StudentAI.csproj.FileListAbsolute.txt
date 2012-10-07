@@ -1,0 +1,5 @@
+C:\Users\AboutOne\Documents\Visual Studio 2010\Projects\UvsChess\Framework\bin\Debug\StudentAI.dll
+C:\Users\AboutOne\Documents\Visual Studio 2010\Projects\UvsChess\Framework\bin\Debug\StudentAI.pdb
+C:\Users\AboutOne\Documents\Visual Studio 2010\Projects\UvsChess\StudentAI\obj\Debug\ResolveAssemblyReference.cache
+C:\Users\AboutOne\Documents\Visual Studio 2010\Projects\UvsChess\StudentAI\obj\Debug\StudentAI.dll
+C:\Users\AboutOne\Documents\Visual Studio 2010\Projects\UvsChess\StudentAI\obj\Debug\StudentAI.pdb
