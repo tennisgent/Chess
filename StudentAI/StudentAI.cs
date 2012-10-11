@@ -9,8 +9,6 @@ namespace StudentAI
     {
         PriorityQueue<ChessMove> ourMoves = new PriorityQueue<ChessMove>();
         PriorityQueue<ChessMove> theirMoves = new PriorityQueue<ChessMove>();
-        bool wasInCheckLastTurn = false;
-        bool wereInCheck = false;
         //You should be able to implement it using PriorityQueue<ChessMove> queue = new PriorityQueue<ChessMove>(); and then you just add things to it using the built in queue.Add(move, points); method.  It should be pretty straight forward.
         //#region IChessAI Members that are implemented by the Student
 
@@ -32,6 +30,45 @@ namespace StudentAI
         /// <param name="board">Current chess board</param>
         /// <param name="yourColor">Your color</param>
         /// <returns> Returns the best chess move the player has for the given chess board</returns>
+        /// 
+        // checks if the passed in move will result in check for the color
+        // opposing myColor
+        public bool check(ChessMove move,ChessBoard board,ChessColor myColor)
+        {
+            if (myColor == ChessColor.White)
+            {
+                if (board[move.To.X, move.To.Y] == ChessPiece.BlackKing)
+                    return true;
+            }
+            else
+                if (board[move.To.X, move.To.Y] == ChessPiece.WhiteKing)
+                    return true;
+            return false;
+            
+        }
+        public ChessMove GetOutOfCheck(PriorityQueue<ChessMove> ourMoves,ChessBoard board, ChessColor myColor)
+        {
+            while (true)
+            {
+                ChessColor enemyColor = 
+                //create a fake board to test moves in
+                ChessBoard tempBoard = board.Clone();
+                PriorityQueue<ChessMove> theirMoves = new PriorityQueue<ChessMove>();
+
+                //get enemy moves
+                if (myColor == ChessColor.White)
+                    theirMoves = GetAllMoves(board, ChessColor.Black);
+                else
+                    theirMoves = GetAllMoves(board, ChessColor.White);
+
+                //take their best move to check for check
+                ChessMove theirMove = theirMoves.Pop();
+                if(check(theirMove,tempBoard,
+            }
+            ChessMove theirMove = theirMoves.Pop();
+            ChessMove ourMove = ourMoves.Pop();
+            return ourMoves;
+        }
         public ChessMove GetNextMove(ChessBoard board, ChessColor myColor)
         {
             ourMoves = new PriorityQueue<ChessMove>();
