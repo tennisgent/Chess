@@ -9,7 +9,6 @@ namespace StudentAI
     {
         PriorityQueue<ChessMove> ourMoves = new PriorityQueue<ChessMove>();
         PriorityQueue<ChessMove> theirMoves = new PriorityQueue<ChessMove>();
-        bool wasInCheckLastTurn = false;
         //You should be able to implement it using PriorityQueue<ChessMove> queue = new PriorityQueue<ChessMove>(); and then you just add things to it using the built in queue.Add(move, points); method.  It should be pretty straight forward.
         //#region IChessAI Members that are implemented by the Student
 
@@ -24,7 +23,6 @@ namespace StudentAI
             get { return "StudentAI"; }
 #endif
         }
-
         /// <summary>
         /// Evaluates the chess board and decided which move to make. This is the main method of the AI.
         /// The framework will call this method when it's your turn.
@@ -32,80 +30,51 @@ namespace StudentAI
         /// <param name="board">Current chess board</param>
         /// <param name="yourColor">Your color</param>
         /// <returns> Returns the best chess move the player has for the given chess board</returns>
+        /// 
+        // checks if the passed in move will result in check for the color
+        // opposing myColor
+        public bool check(ChessMove move,ChessBoard board,ChessColor myColor)
+        {
+            if (myColor == ChessColor.White)
+            {
+                if (board[move.To.X, move.To.Y] == ChessPiece.BlackKing)
+                    return true;
+            }
+            else
+                if (board[move.To.X, move.To.Y] == ChessPiece.WhiteKing)
+                    return true;
+            return false;
+            
+        }
+        public ChessMove GetOutOfCheck(PriorityQueue<ChessMove> ourMoves,ChessBoard board, ChessColor myColor)
+        {
+            while (true)
+            {
+                ChessColor enemyColor = 
+                //create a fake board to test moves in
+                ChessBoard tempBoard = board.Clone();
+                PriorityQueue<ChessMove> theirMoves = new PriorityQueue<ChessMove>();
+
+                //get enemy moves
+                if (myColor == ChessColor.White)
+                    theirMoves = GetAllMoves(board, ChessColor.Black);
+                else
+                    theirMoves = GetAllMoves(board, ChessColor.White);
+
+                //take their best move to check for check
+                ChessMove theirMove = theirMoves.Pop();
+                if(check(theirMove,tempBoard,
+            }
+            ChessMove theirMove = theirMoves.Pop();
+            ChessMove ourMove = ourMoves.Pop();
+            return ourMoves;
+        }
         public ChessMove GetNextMove(ChessBoard board, ChessColor myColor)
         {
             ourMoves = new PriorityQueue<ChessMove>();
             //with priority queue this will return best move
             ourMoves = GetAllMoves(board,myColor);
-            Console.WriteLine(ourMoves.ToString());
             ChessMove ourMove = ourMoves.Pop();
-            ChessMove ourOriginalMove = ourMove;
-            ChessMove theirMove;
-            ChessBoard tempBoard = board.Clone();
-            tempBoard.MakeMove(ourMove);
-            bool wereInCheck = true;
-            //figure out best move that won't put us in check or as last resort make best move if all moves will put in check
-            while (wereInCheck)
-            {
-                wereInCheck = false;
-                if (myColor == ChessColor.White)
-                    theirMoves = GetAllMoves(tempBoard, ChessColor.Black);
-                else
-                    theirMoves = GetAllMoves(tempBoard, ChessColor.White);
-                theirMove = theirMoves.Pop();
-                if (GetPoints(tempBoard[theirMove.To.X, theirMove.To.Y]) > 1000)
-                {
-                    if (ourMoves.Count != 0)
-                        ourMove = ourMoves.Pop();
-                    else
-                        return ourOriginalMove;
-                    theirMoves = new PriorityQueue<ChessMove>();
-                    tempBoard = board.Clone();
-                    tempBoard.MakeMove(ourMove);
-                    wereInCheck = true;
-                }
-            }
-            tempBoard = board.Clone();
-            tempBoard.MakeMove(ourMove);
-            PriorityQueue<ChessMove> nextMoves = new PriorityQueue<ChessMove>();
-            nextMoves = GetAllMoves(tempBoard,myColor);
-            ChessMove ourNextMove = nextMoves.Pop();
-            for (int i = 0; i <= 7; i++)
-            {
-                if(tempBoard[i,0] == ChessPiece.WhitePawn)
-                    tempBoard[i,0] = ChessPiece.WhiteQueen;
-                if(tempBoard[i,7] == ChessPiece.BlackPawn)
-                    tempBoard[i,7] = ChessPiece.BlackQueen;
-            }
-            if (GetPoints(tempBoard[ourNextMove.To.X, ourNextMove.To.Y]) > 1000)
-            {
-                theirMoves = new PriorityQueue<ChessMove>();
-                tempBoard = board.Clone();
-                tempBoard.MakeMove(ourMove);
-                if (myColor == ChessColor.White)
-                    theirMoves = GetAllMoves(tempBoard, ChessColor.Black);
-                else
-                    theirMoves = GetAllMoves(tempBoard, ChessColor.White);
-                while (true)
-                {
-                    if(theirMoves.Count == 0)
-                    {
-                        ourMove.Flag = ChessFlag.Checkmate;
-                        break;
-                    }
-                    theirMove = theirMoves.Pop();
-                    ChessBoard tempBoard2 = tempBoard.Clone();
-                    tempBoard2.MakeMove(theirMove);
-                    ourMoves = new PriorityQueue<ChessMove>();
-                    ourMoves = GetAllMoves(tempBoard2, myColor);
-                    ChessMove temp = ourMoves.Pop();
-                    if (!(GetPoints(tempBoard2[temp.To.X, temp.To.Y]) > 1000))
-                    {
-                        ourMove.Flag = ChessFlag.Check;
-                        break;
-                    }
-                }
-            }
             return ourMove;
         }
 
@@ -119,6 +88,10 @@ namespace StudentAI
         public bool IsValidMove(ChessBoard boardBeforeMove, ChessMove moveToCheck, ChessColor colorOfPlayerMoving)
         {
             //once we have set of moves check it
+            if (moveToCheck.Flag == ChessFlag.Check)
+                wereInCheck = true;
+            else
+                wereInCheck = false;
             return true;
         }
 
@@ -342,7 +315,7 @@ namespace StudentAI
                     // Generate a move to move my pawn 1 tile forward
                     allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X, Y - 1)),GetPoints(board[X,Y-1]));
                 }
-                if (Y == 6 && (board[X, Y - 2] == ChessPiece.Empty) && (board[X, Y] == ChessPiece.WhitePawn))
+                if (Y == 6 && (board[X, Y - 2] == ChessPiece.Empty) && (board[X, Y] == ChessPiece.WhitePawn) && board[X, Y - 1] == ChessPiece.Empty)
                 {
                     // Generate a move to move my pawn 2 tiles forward
                     allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X, Y - 2)),GetPoints(board[X, Y -2]));
@@ -367,7 +340,7 @@ namespace StudentAI
                         // Generate a move to move my pawn 1 tile forward
                         allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X, Y + 1)), GetPoints(board[X, Y + 1]));
                     }
-                    if (Y == 1 && (board[X, Y + 2] == ChessPiece.Empty))
+                    if (Y == 1 && (board[X, Y + 2] == ChessPiece.Empty) && board[X, Y + 1] == ChessPiece.Empty)
                     {
                         // Generate a move to move my pawn 2 tiles forward
                         allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X, Y + 2)), GetPoints(board[X, Y + 2]));
