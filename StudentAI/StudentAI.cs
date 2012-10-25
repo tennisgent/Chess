@@ -7,13 +7,9 @@ namespace StudentAI
 {
     public class StudentAI : IChessAI
     {
-        PriorityQueue<ChessMove> ourMoves = new PriorityQueue<ChessMove>();
-        PriorityQueue<ChessMove> theirMoves = new PriorityQueue<ChessMove>();
-        ChessMove lastMove = default(ChessMove);
-        ChessMove lastLastMove = default(ChessMove);
-        bool inCheck = false;
-
-        public enum Points { Empty = 0, Pawn = 1, Rook = 3, Bishop = 3, Knight = 5, Queen = 10, King = 1000000 }
+        public static Node bestMoveSoFar = null;
+        public ChessColor myColor;
+        public int bestScore;
 
 
         /// <summary>
@@ -61,10 +57,10 @@ namespace StudentAI
         {
             ChessBoard tempBoard = currentBoard.Clone();
             tempBoard.MakeMove(proposedMove);
-            PriorityQueue<ChessMove> possibleMoves = GetAllMoves(tempBoard, OppColor(myColor));
+            List<ChessMove> possibleMoves = GetAllMoves(tempBoard, OppColor(myColor));
             if (possibleMoves.Count != 0)
             {
-                return IsCheck(possibleMoves.Pop(), tempBoard, myColor);
+                return IsCheck(possibleMoves[possibleMoves.Count - 1], tempBoard, myColor);
             }
             else
             {
@@ -78,141 +74,32 @@ namespace StudentAI
         /// </summary>
         /// <param name="color"></param>
         /// <returns></returns>
-        public ChessColor OppColor(ChessColor color){
+        public ChessColor OppColor(ChessColor color)
+        {
             return (color == ChessColor.Black) ? ChessColor.White : ChessColor.Black;
         }
-        public int recurse(ChessMove move, ChessBoard board, ChessColor myColor, int depth=1, int total = 0, bool check = false)
-        {
-            //get new board for future moves
-            board.MakeMove(move);
-            int tempTotal = 0;
-            int bestTotal = 0;
-            PriorityQueue<ChessMove> allPossibleMoves = GetAllMoves(board,myColor);
-            // while there are still moves to check check them
-            while(allPossibleMoves.Count != 0)
-            {
-                move = allPossibleMoves.Pop();
-                //checks for potential checkmate if you were in check and you make a move where you are still in check then its checkmate
-                if (!(WillBeCheck(move, board, myColor) && check))
-                {
-                    if (depth % 2 == 0)
-                    {
-                        tempTotal = GetPoints(board[move.To.X, move.To.Y]) + total;
-                    }
-                    else
-                    {
-                        tempTotal = total - GetPoints(board[move.To.X, move.To.Y]);
-                    }
-                    if (tempTotal > bestTotal)
-                    {
-                        bestTotal = tempTotal;
-                    }
-                    if (depth <= 1)
-                    {
-                        ChessBoard tempBoard = board.Clone();
-                        tempBoard.MakeMove(move);
-                        if(WillBeCheck(move,board,myColor))
-                        {
-                            recurse(move, tempBoard, OppColor(myColor), depth+1, tempTotal,true);
-                        }
-                        else
-                        {
-                            recurse(move, tempBoard, OppColor(myColor), depth+1, tempTotal,false);
-                        }
-                    }
-                }
-                // if we were in check and our next move is also in check then were in trouble and need to ignore all moves that will keep us in check
-                else
-                {
-                    // all moves need to be considered from the perspective of whether you were in check or not before
-                    // so a temp variable is needed invalid moves will be filtered
-                    bool tempCheck = check;
-                    // in check and next move will be check go through moves trying to break check
-                    while (tempCheck && allPossibleMoves.Count != 0)
-                    {
-                        move = allPossibleMoves.Pop();
-                        if(!(WillBeCheck(move,board,myColor)))
-                        {
-                            tempCheck = false;
-                        }
-                    }
-                    // if we get here and we didn't break check then checkmate for us or them
-                    if (tempCheck)
-                    {
-                        if (depth % 2 == 0)
-                        {
-                            // were in checkmate if we follow the moves that led here
-                            return 10000;
-                        }
-                        else
-                        {
-                            // we got them in check mate their current move and their next move will be check
-                            return -10000;
-                        }
-                    }
-                }
-            }
-            if (check)
-            {
-                bestTotal += 1000;
-            }
-            return bestTotal;
-        }
+
+
+
         public ChessMove GetNextMove(ChessBoard board, ChessColor myColor)
         {
-            PriorityQueue<ChessMove> allPossibleMoves = GetAllMoves(board, myColor);
-            ChessMove bestMove = default(ChessMove);
-            ChessMove backupMove = default(ChessMove);
-            ChessMove possibleMove = default(ChessMove);
-            ChessBoard tempBoard = board.Clone();
-            while (allPossibleMoves.Count != 0)
+            bestMoveSoFar = null;
+            this.myColor = myColor;
+            Node root = new Node(OppColor(myColor), null, board, null);
+            const int DEPTH_LIMIT = 2;
+            for (int i = 0; i < DEPTH_LIMIT; i++)
             {
-                possibleMove = allPossibleMoves.Pop();
-                if (bestMove == null)
+                Console.WriteLine(i);
+                if (!IsMyTurnOver())
                 {
-                    bestMove = possibleMove;
-                    backupMove = bestMove;
-                    bestMove.ValueOfMove = -1;
+                    MakeChildren(root);
                 }
-                int score = recurse(possibleMove, tempBoard, OppColor(myColor));
-                if (score > bestMove.ValueOfMove)
-                {
-                    backupMove = bestMove;
-                    bestMove = possibleMove;
-                    bestMove.ValueOfMove = (int)score;
-                    if (score/1000 == 1)
-                    {
-                        bestMove.Flag = ChessFlag.Check;
-                    }
-                    else if (score/10000 == 1)
-                    {
-                        bestMove.Flag = ChessFlag.Checkmate;
-                    }
-                    else if (score / 10000 == -1)
-                    {
-                        bestMove.Flag = ChessFlag.Stalemate;
-                    }
-                }
-            }
-            if (lastMove != null)
-            {
-                if (lastMove.From != bestMove.To)
-                {
-                    lastMove = bestMove;
-                    return bestMove;
-                }
-
                 else
                 {
-                    lastMove = backupMove;
-                    return backupMove;
+                    return bestMoveSoFar.GetActualMove();
                 }
             }
-            else
-            {
-                lastMove = bestMove;
-                return bestMove;
-            }
+            return bestMoveSoFar.GetActualMove();
         }
 
         /// <summary>
@@ -224,12 +111,12 @@ namespace StudentAI
         /// <returns>Returns true if the move was valid</returns>
         public bool IsValidMove(ChessBoard boardBeforeMove, ChessMove moveToCheck, ChessColor colorOfPlayerMoving)
         {
-            inCheck = false;
             if (moveToCheck.Flag == ChessFlag.Checkmate)
             {
                 boardBeforeMove.MakeMove(moveToCheck);
-                PriorityQueue<ChessMove> possibleMoves = GetAllMoves(boardBeforeMove, OppColor(colorOfPlayerMoving));
-                ChessMove bestMove = possibleMoves.Pop();
+                List<ChessMove> possibleMoves = GetAllMoves(boardBeforeMove, OppColor(colorOfPlayerMoving));
+                ChessMove bestMove = possibleMoves[possibleMoves.Count - 1];
+                possibleMoves.RemoveAt(possibleMoves.Count - 1);
                 while (WillBeCheck(bestMove, boardBeforeMove, OppColor(colorOfPlayerMoving)))
                 {
                     if (possibleMoves.Count == 0)
@@ -238,7 +125,8 @@ namespace StudentAI
                     }
                     else
                     {
-                        bestMove = possibleMoves.Pop();
+                        bestMove = possibleMoves[possibleMoves.Count - 1];
+                        possibleMoves.RemoveAt(possibleMoves.Count - 1);
                     }
                 }
                 return false;
@@ -249,10 +137,6 @@ namespace StudentAI
             }
             else
             {
-                if (moveToCheck.Flag == ChessFlag.Check)
-                {
-                    inCheck = true;
-                }
                 //once we have set of moves check it
                 return true;
             }
@@ -262,9 +146,9 @@ namespace StudentAI
 
         #region Functions implemented by Tristan and Zack
 
-        PriorityQueue<ChessMove> GetAllMoves(ChessBoard currentBoard, ChessColor myColor)
+        public List<ChessMove> GetAllMoves(ChessBoard currentBoard, ChessColor myColor)
         {
-            PriorityQueue<ChessMove> allMoves = new PriorityQueue<ChessMove>();
+            List<ChessMove> allMoves = new List<ChessMove>();
             for (int Y = 0; Y < ChessBoard.NumberOfRows; Y++)
             {
                 for (int X = 0; X < ChessBoard.NumberOfColumns; X++)
@@ -273,33 +157,33 @@ namespace StudentAI
                     {
                         case ChessPiece.BlackPawn:
                         case ChessPiece.WhitePawn:
-                            if(IsColor(myColor,currentBoard[X, Y]))
-                            allMoves = GetAllPawnMoves(allMoves, currentBoard, X, Y, myColor);
+                            if (IsColor(myColor, currentBoard[X, Y]))
+                                allMoves = GetAllPawnMoves(allMoves, currentBoard, X, Y, myColor);
                             break;
                         case ChessPiece.BlackRook:
                         case ChessPiece.WhiteRook:
                             if (IsColor(myColor, currentBoard[X, Y]))
-                            allMoves = GetAllRookMoves(allMoves, currentBoard, X, Y, myColor);
+                                allMoves = GetAllRookMoves(allMoves, currentBoard, X, Y, myColor);
                             break;
                         case ChessPiece.BlackKnight:
                         case ChessPiece.WhiteKnight:
                             if (IsColor(myColor, currentBoard[X, Y]))
-                            allMoves = GetAllKnightMoves(allMoves, currentBoard, X, Y, myColor);
+                                allMoves = GetAllKnightMoves(allMoves, currentBoard, X, Y, myColor);
                             break;
                         case ChessPiece.BlackBishop:
                         case ChessPiece.WhiteBishop:
                             if (IsColor(myColor, currentBoard[X, Y]))
-                            allMoves = GetAllBishopMoves(allMoves, currentBoard, X, Y, myColor);
+                                allMoves = GetAllBishopMoves(allMoves, currentBoard, X, Y, myColor);
                             break;
                         case ChessPiece.BlackQueen:
                         case ChessPiece.WhiteQueen:
                             if (IsColor(myColor, currentBoard[X, Y]))
-                            allMoves = GetAllQueenMoves(allMoves, currentBoard, X, Y, myColor);
+                                allMoves = GetAllQueenMoves(allMoves, currentBoard, X, Y, myColor);
                             break;
                         case ChessPiece.BlackKing:
                         case ChessPiece.WhiteKing:
                             if (IsColor(myColor, currentBoard[X, Y]))
-                            allMoves = GetAllKingMoves(allMoves, currentBoard, X, Y, myColor);
+                                allMoves = GetAllKingMoves(allMoves, currentBoard, X, Y, myColor);
                             break;
                         default:
                             break;
@@ -362,70 +246,86 @@ namespace StudentAI
             }
         }
 
-        public PriorityQueue<ChessMove> GetAllKingMoves(PriorityQueue<ChessMove> allMoves, ChessBoard board, int X, int Y, ChessColor myColor)
+        public List<ChessMove> GetAllKingMoves(List<ChessMove> allMoves, ChessBoard board, int X, int Y, ChessColor myColor)
         {
             allMoves = GetAllBishopMoves(allMoves, board, X, Y, myColor, 1);
             allMoves = GetAllRookMoves(allMoves, board, X, Y, myColor, 1);
             return allMoves;
         }
 
-        public PriorityQueue<ChessMove> GetAllKnightMoves(PriorityQueue<ChessMove> allMoves, ChessBoard board, int X, int Y, ChessColor myColor)
+        public List<ChessMove> GetAllKnightMoves(List<ChessMove> allMoves, ChessBoard board, int X, int Y, ChessColor myColor)
         {
-                if (X + 2 <= 7 && Y + 1 <= 7)
-                    if (!(IsColor(myColor, board[X + 2, Y + 1])))
-                    {
-                        allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X + 2, Y + 1)),GetPoints(board[X + 2, Y + 1]));
-                    }
+            if (X + 2 <= 7 && Y + 1 <= 7)
+                if (!(IsColor(myColor, board[X + 2, Y + 1])))
+                {
+                    ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X + 2, Y + 1));
+                    move.ValueOfMove = GetPoints(board[X + 2, Y + 1]);
+                    allMoves.Add(move);
+                }
 
-                if (X + 2 <= 7 && Y - 1 >= 0)
-                    if (!(IsColor(myColor,board[X + 2, Y - 1])))
-                    {
-                            allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X + 2, Y - 1)), GetPoints(board[X + 2, Y - 1]));
-                    }
+            if (X + 2 <= 7 && Y - 1 >= 0)
+                if (!(IsColor(myColor, board[X + 2, Y - 1])))
+                {
+                    ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X + 2, Y - 1));
+                    move.ValueOfMove = GetPoints(board[X + 2, Y - 1]);
+                    allMoves.Add(move);
+                }
 
-                if (X + 1 <= 7 && Y + 2 <= 7)
-                    if (!(IsColor(myColor, board[X + 1, Y + 2])))
-                    {
-                            allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X + 1, Y + 2)), GetPoints(board[X + 1, Y + 2]));
-                    }
+            if (X + 1 <= 7 && Y + 2 <= 7)
+                if (!(IsColor(myColor, board[X + 1, Y + 2])))
+                {
+                    ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X + 1, Y + 2));
+                    move.ValueOfMove = GetPoints(board[X + 1, Y + 2]);
+                    allMoves.Add(move);
+                }
 
-                if (X + 1 <= 7 && Y - 2 >= 0)
-                    if (!(IsColor(myColor, board[X + 1, Y - 2])))
-                    {
-                            allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X + 1, Y - 2)), GetPoints(board[X + 1, Y - 2]));
-                    }
+            if (X + 1 <= 7 && Y - 2 >= 0)
+                if (!(IsColor(myColor, board[X + 1, Y - 2])))
+                {
+                    ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X + 1, Y - 2));
+                    move.ValueOfMove = GetPoints(board[X + 1, Y - 2]);
+                    allMoves.Add(move);
+                }
 
-                if (X - 1 >= 0 && Y + 2 <= 7)
-                    if (!(IsColor(myColor, board[X - 1, Y + 2])))
-                    {
-                            allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X - 1, Y + 2)), GetPoints(board[X - 1, Y + 2]));
-                    }
-                if (X - 1 >= 0 && Y - 2 >= 0)
-                    if (!(IsColor(myColor, board[X - 1, Y - 2])))
-                    {
-                            allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X - 1, Y - 2)), GetPoints(board[X - 1, Y - 2]));
-                    }
-                if (X - 2 >= 0 && Y - 1 >= 0)
-                    if (!(IsColor(myColor, board[X - 2, Y - 1])))
-                    {
-                            allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X - 2, Y - 1)), GetPoints(board[X - 2, Y - 1]));
-                    }
-                if (X - 2 >= 0 && Y + 1 <= 7)
-                    if (!(IsColor(myColor, board[X - 2, Y + 1])))
-                    {
-                            allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X - 2, Y + 1)), GetPoints(board[X - 2, Y + 1]));
-                    } 
+            if (X - 1 >= 0 && Y + 2 <= 7)
+                if (!(IsColor(myColor, board[X - 1, Y + 2])))
+                {
+                    ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X - 1, Y + 2));
+                    move.ValueOfMove = GetPoints(board[X - 1, Y + 2]);
+                    allMoves.Add(move);
+                }
+            if (X - 1 >= 0 && Y - 2 >= 0)
+                if (!(IsColor(myColor, board[X - 1, Y - 2])))
+                {
+                    ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X - 1, Y - 2));
+                    move.ValueOfMove = GetPoints(board[X - 1, Y - 2]);
+                    allMoves.Add(move);
+                }
+            if (X - 2 >= 0 && Y - 1 >= 0)
+                if (!(IsColor(myColor, board[X - 2, Y - 1])))
+                {
+                    ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X - 2, Y - 1));
+                    move.ValueOfMove = GetPoints(board[X - 2, Y - 1]);
+                    allMoves.Add(move);
+                }
+            if (X - 2 >= 0 && Y + 1 <= 7)
+                if (!(IsColor(myColor, board[X - 2, Y + 1])))
+                {
+                    ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X - 2, Y + 1));
+                    move.ValueOfMove = GetPoints(board[X - 2, Y + 1]);
+                    allMoves.Add(move);
+                }
             return allMoves;
         }
 
-        public PriorityQueue<ChessMove> GetAllQueenMoves(PriorityQueue<ChessMove> allMoves, ChessBoard board, int X, int Y, ChessColor myColor)
+        public List<ChessMove> GetAllQueenMoves(List<ChessMove> allMoves, ChessBoard board, int X, int Y, ChessColor myColor)
         {
-            allMoves = GetAllBishopMoves(allMoves,board,X,Y,myColor);
-            allMoves = GetAllRookMoves(allMoves,board,X,Y,myColor);
+            allMoves = GetAllBishopMoves(allMoves, board, X, Y, myColor);
+            allMoves = GetAllRookMoves(allMoves, board, X, Y, myColor);
             return allMoves;
         }
 
-        public PriorityQueue<ChessMove> GetAllBishopMoves(PriorityQueue<ChessMove> allMoves, ChessBoard board, int X, int Y, ChessColor myColor,int maxDist = ChessBoard.NumberOfColumns-1)
+        public List<ChessMove> GetAllBishopMoves(List<ChessMove> allMoves, ChessBoard board, int X, int Y, ChessColor myColor, int maxDist = ChessBoard.NumberOfColumns-1)
         {
             // the maximum number of moves from corner to corner is 7
             // flag1 represents up and right, flag 2 right and down flag 3 down and left flag 4 up and left
@@ -441,7 +341,9 @@ namespace StudentAI
                     {
                         if (!(IsColor(myColor, board[X + i, Y + i])))
                         {
-                            allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X + i, Y + i)), GetPoints(board[X + i, Y + i]));
+                            ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X + i, Y + i));
+                            move.ValueOfMove = GetPoints(board[X + i, Y + i]);
+                            allMoves.Add(move);
                         }
                         if (board[X + i, Y + i] != ChessPiece.Empty)
                         {
@@ -459,7 +361,9 @@ namespace StudentAI
                     {
                         if (!(IsColor(myColor, board[X + i, Y - i])))
                         {
-                            allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X + i, Y - i)), GetPoints(board[X + i, Y - i]));
+                            ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X + i, Y - i));
+                            move.ValueOfMove = GetPoints(board[X + i, Y - i]);
+                            allMoves.Add(move);
                         }
                         if (board[X + i, Y - i] != ChessPiece.Empty)
                         {
@@ -477,7 +381,9 @@ namespace StudentAI
                     {
                         if (!(IsColor(myColor, board[X - i, Y - i])))
                         {
-                            allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X - i, Y - i)), GetPoints(board[X - i, Y - i]));
+                            ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X - i, Y - i));
+                            move.ValueOfMove = GetPoints(board[X - i, Y - i]);
+                            allMoves.Add(move);
                         }
                         if (board[X - i, Y - i] != ChessPiece.Empty)
                         {
@@ -495,7 +401,9 @@ namespace StudentAI
                     {
                         if (!(IsColor(myColor, board[X - i, Y + i])))
                         {
-                            allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X - i, Y + i)), GetPoints(board[X - i, Y + i]));
+                            ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X - i, Y + i));
+                            move.ValueOfMove = GetPoints(board[X - i, Y + i]);
+                            allMoves.Add(move);
                         }
                         if (board[X - i, Y + i] != ChessPiece.Empty)
                         {
@@ -510,64 +418,155 @@ namespace StudentAI
             }
             return allMoves;
         }
-       
-        public PriorityQueue<ChessMove> GetAllPawnMoves(PriorityQueue<ChessMove> allMoves, ChessBoard board, int X, int Y, ChessColor myColor)
+
+        public List<ChessMove> GetAllPawnMoves(List<ChessMove> allMoves, ChessBoard board, int X, int Y, ChessColor myColor)
         {
-            
+
             if (myColor == ChessColor.White)
             {
-                if (IsNotOffBoard(X,Y-1) && (board[X, Y - 1] == ChessPiece.Empty) && (board[X, Y] == ChessPiece.WhitePawn))
+                if (IsNotOffBoard(X, Y - 1) && (board[X, Y - 1] == ChessPiece.Empty) && (board[X, Y] == ChessPiece.WhitePawn))
                 {
                     // Generate a move to move my pawn 1 tile forward
-                    allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X, Y - 1)),GetPoints(board[X,Y-1]));
+                    ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X, Y - 1));
+                    move.ValueOfMove = GetPoints(board[X, Y - 1]);
+                    allMoves.Add(move);
                 }
                 if (Y == 6 && (board[X, Y - 2] == ChessPiece.Empty) && (board[X, Y] == ChessPiece.WhitePawn) && board[X, Y - 1] == ChessPiece.Empty)
                 {
                     // Generate a move to move my pawn 2 tiles forward
-                    allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X, Y - 2)),GetPoints(board[X, Y -2]));
+                    ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X, Y - 2));
+                    move.ValueOfMove = GetPoints(board[X, Y - 2]);
+                    allMoves.Add(move);
                 }
-                if (IsNotOffBoard(X-1,Y-1) && IsColor(ChessColor.Black, board[X - 1, Y - 1]) && (board[X, Y] == ChessPiece.WhitePawn))
+                if (IsNotOffBoard(X - 1, Y - 1) && IsColor(ChessColor.Black, board[X - 1, Y - 1]) && (board[X, Y] == ChessPiece.WhitePawn))
                 {
                     // Generate a move to take a piece to the left
-                    allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X - 1, Y - 1)),GetPoints(board[X - 1, Y - 1]));
+                    ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X - 1, Y - 1));
+                    move.ValueOfMove = GetPoints(board[X - 1, Y - 1]);
+                    allMoves.Add(move);
                 }
-                if (IsNotOffBoard(X+1,Y-1) && IsColor(ChessColor.Black, board[X + 1, Y - 1]) && (board[X, Y] == ChessPiece.WhitePawn))
+                if (IsNotOffBoard(X + 1, Y - 1) && IsColor(ChessColor.Black, board[X + 1, Y - 1]) && (board[X, Y] == ChessPiece.WhitePawn))
                 {
                     // Generate a move to take a piece to the right
-                    allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X + 1, Y - 1)), GetPoints(board[X + 1, Y - 1]));
+                    ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X + 1, Y - 1));
+                    move.ValueOfMove = GetPoints(board[X + 1, Y - 1]);
+                    allMoves.Add(move);
                 }
             }
             else // myColor is black
             {
                 if (board[X, Y] == ChessPiece.BlackPawn)
                 {
-                    if (IsNotOffBoard(X, Y+1) && (board[X, Y + 1] == ChessPiece.Empty))
+                    if (IsNotOffBoard(X, Y + 1) && (board[X, Y + 1] == ChessPiece.Empty))
                     {
                         // Generate a move to move my pawn 1 tile forward
-                        allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X, Y + 1)), GetPoints(board[X, Y + 1]));
+                        ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X, Y + 1));
+                        move.ValueOfMove = GetPoints(board[X, Y + 1]);
+                        allMoves.Add(move);
                     }
                     if (Y == 1 && (board[X, Y + 2] == ChessPiece.Empty) && board[X, Y + 1] == ChessPiece.Empty)
                     {
                         // Generate a move to move my pawn 2 tiles forward
-                        allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X, Y + 2)), GetPoints(board[X, Y + 2]));
+                        ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X, Y + 2));
+                        move.ValueOfMove = GetPoints(board[X, Y + 2]);
+                        allMoves.Add(move);
                     }
-                    if (IsNotOffBoard(X+1,Y+1) && IsColor(ChessColor.White, board[X + 1, Y + 1]))
+                    if (IsNotOffBoard(X + 1, Y + 1) && IsColor(ChessColor.White, board[X + 1, Y + 1]))
                     {
                         // Generate a move to take a piece to the right
-                        allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X + 1, Y + 1)), GetPoints(board[X + 1, Y + 1]));
+                        ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X + 1, Y + 1));
+                        move.ValueOfMove = GetPoints(board[X + 1, Y + 1]);
+                        allMoves.Add(move);
                     }
-                    if (IsNotOffBoard(X-1,Y+1) && IsColor(ChessColor.White, board[X - 1, Y + 1]))
+                    if (IsNotOffBoard(X - 1, Y + 1) && IsColor(ChessColor.White, board[X - 1, Y + 1]))
                     {
                         // Generate a move to take a piece to the left
-                        allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X - 1, Y + 1)), GetPoints(board[X - 1, Y + 1]));
+                        ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X - 1, Y + 1));
+                        move.ValueOfMove = GetPoints(board[X - 1, Y + 1]);
+                        allMoves.Add(move);
                     }
                 }
             }
 
             return allMoves;
         }
-        
-        public PriorityQueue<ChessMove> GetAllRookMoves(PriorityQueue<ChessMove> allMoves, ChessBoard board, int X, int Y, ChessColor myColor, int maxDist = ChessBoard.NumberOfColumns-1)
+       public void MakeChildren(Node parent)
+        {
+            if (parent.children == null)
+            {
+                parent.children = new List<Node>();
+                List<ChessMove> moves = GetAllMoves(parent.board, OppColor(parent.color));
+                foreach (ChessMove move in moves)
+                {
+                    ChessBoard tempBoard = parent.board.Clone();
+                    tempBoard.MakeMove(move);
+                    //IsValidMove(ChessBoard boardBeforeMove, ChessMove moveToCheck, ChessColor colorOfPlayerMoving)
+                    if (parent.move != null)
+                    {
+                        if(parent.color != myColor)
+                        {
+                            move.ValueOfMove = parent.move.ValueOfMove + GetPoints(parent.board[move.To.X, move.To.Y]);
+                        }
+                        else
+                        {
+                            move.ValueOfMove = parent.move.ValueOfMove - GetPoints(parent.board[move.To.X, move.To.Y]);
+                        }
+                    }
+                    else
+                    {
+                        move.ValueOfMove = GetPoints(parent.board[move.To.X, move.To.Y]);
+                    }
+                    Node newChild = new Node(OppColor(parent.color), move, tempBoard, parent);
+                    if(bestMoveSoFar == null)
+                    {
+                        bestMoveSoFar = newChild;
+                    }
+                    if (IsValidMove(parent.board, move, OppColor(parent.color)))
+                    {
+                        parent.children.Add(newChild);
+                        if (newChild.move.ValueOfMove > bestMoveSoFar.move.ValueOfMove)
+                        {
+                            bestMoveSoFar = newChild;
+                        }
+                    }
+                    else
+                    {
+                        move.Flag = ChessFlag.Check;
+                        if (!(IsValidMove(parent.board, move, OppColor(parent.color))))
+                        {
+                            move.Flag = ChessFlag.Checkmate;
+                            if (IsValidMove(parent.board, move, OppColor(parent.color)))
+                            {
+                                if (OppColor(parent.color) != myColor)
+                                {
+                                    parent.children.Add(newChild);
+                                    if (newChild.move.ValueOfMove > bestMoveSoFar.move.ValueOfMove)
+                                    {
+                                        bestMoveSoFar = newChild;
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            if (newChild.move.ValueOfMove > bestMoveSoFar.move.ValueOfMove)
+                            {
+                                bestMoveSoFar = newChild;
+                            }
+                            parent.children.Add(newChild);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                foreach (Node child in parent.children)
+                {
+                    MakeChildren(child);
+                }
+            }
+        }
+        public List<ChessMove> GetAllRookMoves(List<ChessMove> allMoves, ChessBoard board, int X, int Y, ChessColor myColor, int maxDist = ChessBoard.NumberOfColumns-1)
         {
             bool up = true, right = true, down = true, left = true;
 
@@ -579,16 +578,20 @@ namespace StudentAI
                 {
                     int points = GetPoints(board[X, Y - i]);
                     up = (points == 0) && IsNotOffBoard(X, Y - i);
-                    allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X, Y - i)), GetPoints(board[X, Y - i]));
+                    ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X, Y - i));
+                    move.ValueOfMove = GetPoints(board[X, Y - i]);
+                    allMoves.Add(move);
                 }
                 else
-                up = false;
+                    up = false;
                 //If we should check right and the next spot isn't off the board and the next spot is empty || opposite color, then add move
                 if (right && IsNotOffBoard(X + i, Y) && !IsColor(myColor, board[X + i, Y]))
                 {
                     int points = GetPoints(board[X + i, Y]);
                     right = (points == 0) && IsNotOffBoard(X + i, Y);
-                    allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X + i, Y)), GetPoints(board[X + i, Y]));
+                    ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X + i, Y));
+                    move.ValueOfMove = GetPoints(board[X + i, Y]);
+                    allMoves.Add(move);
                 }
                 right = false;
                 //If we should check down and the next spot isn't off the board and the next spot is empty, then add move
@@ -596,19 +599,23 @@ namespace StudentAI
                 {
                     int points = GetPoints(board[X, Y + i]);
                     down = (points == 0) && IsNotOffBoard(X, Y + i);
-                    allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X, Y + i)), GetPoints(board[X, Y + i]));
+                    ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X, Y + i));
+                    move.ValueOfMove = GetPoints(board[X, Y + i]);
+                    allMoves.Add(move);
                 }
                 else
-                down = false;
+                    down = false;
                 //If we should check left and the next spot isn't off the board and the next spot is empty, then add move
                 if (left && IsNotOffBoard(X - i, Y) && !IsColor(myColor, board[X - i, Y]))
                 {
                     int points = GetPoints(board[X - i, Y]);
                     left = (points == 0) && IsNotOffBoard(X - i, Y);
-                    allMoves.Add(new ChessMove(new ChessLocation(X, Y), new ChessLocation(X - i, Y)), GetPoints(board[X - i, Y]));
+                    ChessMove move = new ChessMove(new ChessLocation(X, Y), new ChessLocation(X - i, Y));
+                    move.ValueOfMove = GetPoints(board[X - i, Y]);
+                    allMoves.Add(move);
                 }
                 else
-                left = false;
+                    left = false;
                 // If we have stopped looking in all directions, then stop looping and return
                 if (!up && !right && !down && !left)
                 {
