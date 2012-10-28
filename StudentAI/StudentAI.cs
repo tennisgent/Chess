@@ -10,7 +10,9 @@ namespace StudentAI
         public static Node bestMoveSoFar = null;
         public ChessColor myColor;
         public int bestScore;
-
+        public ChessBoard board;
+        public ChessMove theirMove;
+        public Node root;
 
         /// <summary>
         /// The name of your AI
@@ -30,7 +32,7 @@ namespace StudentAI
         /// <param name="board">Current chess board</param>
         /// <param name="yourColor">Your color</param>
         /// <returns> Returns the best chess move the player has for the given chess board</returns>
-        /// 
+        ///
         // checks if the passed in move will result in myColor being in check
         public bool IsCheck(ChessMove move, ChessBoard board, ChessColor myColor)
         {
@@ -41,12 +43,12 @@ namespace StudentAI
         /// <summary>
         /// Function checks to see if taking the proposedMove will put (or keep)
         /// myColor in check.
-        /// 
+        ///
         /// First it copies the currentBoard and applies the proposed move.
         /// Next it gathers all the possible moves for the opposing color
         /// and returns the best move for that color.
-        /// Finally it checks to make sure that the best move does 
-        /// not take myColor's king.  If it doesn't, then the proposedMove
+        /// Finally it checks to make sure that the best move does
+        /// not take myColor's king. If it doesn't, then the proposedMove
         /// will get myColor out of check.
         /// </summary>
         /// <param name="proposedMove"></param>
@@ -80,25 +82,74 @@ namespace StudentAI
         }
 
 
-
+        public void GetBestMove(List<ChessMove> possibleMoves,List<Node> children,int score,Node parent)
+        {
+            ChessMove bestMove = null;
+            foreach (ChessMove move in possibleMoves)
+            {
+                move.ValueOfMove = score - GetPoints(this.board[move.To]);
+                if(bestMove == null)
+                {
+                    bestMove = move;
+                }
+                else
+                {
+                    if(bestMove.ValueOfMove > move.ValueOfMove)
+                    {
+                        bestMove = move;
+                    }
+                }
+            }
+            if (bestMove.ValueOfMove == score)
+            {
+                foreach (ChessMove move in possibleMoves)
+                {
+                    children.Add(new Node(OppColor(this.myColor), move, parent));
+                }
+            }
+            else
+            {
+                children.Add(new Node(OppColor(this.myColor), bestMove, parent));
+            }
+        }
         public ChessMove GetNextMove(ChessBoard board, ChessColor myColor)
         {
-            bestMoveSoFar = null;
+            this.board = board;
             this.myColor = myColor;
-            Node root = new Node(OppColor(myColor), null, board, null);
-            const int DEPTH_LIMIT = 2;
+            if (bestMoveSoFar == null)
+            {
+                root = new Node(OppColor(myColor), null, null);
+            }
+            else
+            {
+                foreach (Node child in bestMoveSoFar.GetActualNode().children)
+                {
+                    if(child.move == this.theirMove)
+                    {
+                        root = child;
+                        root.parent = null;
+                        root.move = null;
+                        break;
+                    }
+                }
+            }
+            bestMoveSoFar = null;
+            const int DEPTH_LIMIT = 8;
             for (int i = 0; i < DEPTH_LIMIT; i++)
             {
-                Console.WriteLine(i);
                 if (!IsMyTurnOver())
                 {
                     MakeChildren(root);
                 }
                 else
                 {
+                    Console.Write("depth ");
+                    Console.WriteLine(bestMoveSoFar.GetActualNode().depth);
                     return bestMoveSoFar.GetActualMove();
                 }
             }
+            Console.Write("depth ");
+            Console.WriteLine(bestMoveSoFar.GetActualNode().depth);
             return bestMoveSoFar.GetActualMove();
         }
 
@@ -111,6 +162,7 @@ namespace StudentAI
         /// <returns>Returns true if the move was valid</returns>
         public bool IsValidMove(ChessBoard boardBeforeMove, ChessMove moveToCheck, ChessColor colorOfPlayerMoving)
         {
+            this.theirMove = moveToCheck;
             if (moveToCheck.Flag == ChessFlag.Checkmate)
             {
                 boardBeforeMove.MakeMove(moveToCheck);
@@ -490,79 +542,116 @@ namespace StudentAI
 
             return allMoves;
         }
-       public void MakeChildren(Node parent)
+        public void MakeChildren(Node parent)
         {
-            if (parent.children == null)
+            if (parent.color == this.myColor && parent.children == null)
             {
+                ChessPiece temp2 = board[parent.move.To];
+                this.board.MakeMove(parent.move);
+                List<ChessMove> moves = GetAllMoves(this.board, OppColor(this.myColor));
                 parent.children = new List<Node>();
-                List<ChessMove> moves = GetAllMoves(parent.board, OppColor(parent.color));
-                foreach (ChessMove move in moves)
+                GetBestMove(moves,parent.children,parent.move.ValueOfMove,parent);
+                board.MakeMove(new ChessMove(parent.move.To, parent.move.From));
+                board[parent.move.To] = temp2;
+            }
+            else if (parent.color == this.myColor && parent.children == null)
+            {
+                ChessPiece temp2 = board[parent.move.To];
+                this.board.MakeMove(parent.move);
+                foreach (Node child in parent.children)
                 {
-                    ChessBoard tempBoard = parent.board.Clone();
-                    tempBoard.MakeMove(move);
-                    //IsValidMove(ChessBoard boardBeforeMove, ChessMove moveToCheck, ChessColor colorOfPlayerMoving)
+                    MakeChildren(child);
+                }
+                board.MakeMove(new ChessMove(parent.move.To, parent.move.From));
+                board[parent.move.To] = temp2;
+            }
+            else
+            {
+                if (!(IsMyTurnOver()))
+                {
+                    ChessPiece temp2 = ChessPiece.Empty;
                     if (parent.move != null)
                     {
-                        if(parent.color != myColor)
-                        {
-                            move.ValueOfMove = parent.move.ValueOfMove + GetPoints(parent.board[move.To.X, move.To.Y]);
-                        }
-                        else
-                        {
-                            move.ValueOfMove = parent.move.ValueOfMove - GetPoints(parent.board[move.To.X, move.To.Y]);
-                        }
+                        temp2 = board[parent.move.To];
+                        this.board.MakeMove(parent.move);
                     }
-                    else
+                    if (parent.children == null)
                     {
-                        move.ValueOfMove = GetPoints(parent.board[move.To.X, move.To.Y]);
-                    }
-                    Node newChild = new Node(OppColor(parent.color), move, tempBoard, parent);
-                    if(bestMoveSoFar == null)
-                    {
-                        bestMoveSoFar = newChild;
-                    }
-                    if (IsValidMove(parent.board, move, OppColor(parent.color)))
-                    {
-                        parent.children.Add(newChild);
-                        if (newChild.move.ValueOfMove > bestMoveSoFar.move.ValueOfMove)
+                        parent.children = new List<Node>();
+                        //got to record what was where the piece is moving just in case
+                        List<ChessMove> moves = GetAllMoves(this.board, OppColor(parent.color));
+                        foreach (ChessMove move in moves)
                         {
-                            bestMoveSoFar = newChild;
-                        }
-                    }
-                    else
-                    {
-                        move.Flag = ChessFlag.Check;
-                        if (!(IsValidMove(parent.board, move, OppColor(parent.color))))
-                        {
-                            move.Flag = ChessFlag.Checkmate;
-                            if (IsValidMove(parent.board, move, OppColor(parent.color)))
+                            //ChessBoard tempBoard = parent.board.Clone();
+                            if (parent.move != null)
                             {
-                                if (OppColor(parent.color) != myColor)
+                                if (parent.color != myColor)
                                 {
-                                    parent.children.Add(newChild);
+                                    move.ValueOfMove = parent.move.ValueOfMove + GetPoints(this.board[move.To.X, move.To.Y]);
+                                }
+                                else
+                                {
+                                    move.ValueOfMove = parent.move.ValueOfMove - GetPoints(this.board[move.To.X, move.To.Y]);
+                                }
+                            }
+                            else
+                            {
+                                move.ValueOfMove = GetPoints(this.board[move.To.X, move.To.Y]);
+                            }
+                            Node newChild = new Node(OppColor(parent.color), move, parent);
+                            if (bestMoveSoFar == null)
+                            {
+                                bestMoveSoFar = newChild;
+                            }
+                            if (IsValidMove(this.board, move, OppColor(parent.color)))
+                            {
+                                parent.children.Add(newChild);
+                                if (newChild.move.ValueOfMove > bestMoveSoFar.move.ValueOfMove)
+                                {
+                                    bestMoveSoFar = newChild;
+                                }
+                            }
+                            else
+                            {
+                                move.Flag = ChessFlag.Check;
+                                if (!(IsValidMove(this.board, move, OppColor(parent.color))))
+                                {
+                                    move.Flag = ChessFlag.Checkmate;
+                                    if (IsValidMove(this.board, move, OppColor(parent.color)))
+                                    {
+                                        if (OppColor(parent.color) != myColor)
+                                        {
+                                            parent.children.Add(newChild);
+                                            if (newChild.move.ValueOfMove > bestMoveSoFar.move.ValueOfMove)
+                                            {
+                                                bestMoveSoFar = newChild;
+                                            }
+                                        }
+                                    }
+                                }
+                                else
+                                {
                                     if (newChild.move.ValueOfMove > bestMoveSoFar.move.ValueOfMove)
                                     {
                                         bestMoveSoFar = newChild;
                                     }
+                                    parent.children.Add(newChild);
                                 }
                             }
                         }
-                        else
+                    }
+                    else
+                    {
+                        foreach (Node child in parent.children)
                         {
-                            if (newChild.move.ValueOfMove > bestMoveSoFar.move.ValueOfMove)
-                            {
-                                bestMoveSoFar = newChild;
-                            }
-                            parent.children.Add(newChild);
+                            MakeChildren(child);
                         }
                     }
-                }
-            }
-            else
-            {
-                foreach (Node child in parent.children)
-                {
-                    MakeChildren(child);
+                    if (parent.move != null)
+                    {
+                        board.MakeMove(new ChessMove(parent.move.To, parent.move.From));
+                        board[parent.move.To] = temp2;
+                    }
                 }
             }
         }
@@ -638,9 +727,9 @@ namespace StudentAI
         #region IChessAI Members that should be implemented as automatic properties and should NEVER be touched by students.
         /// <summary>
         /// This will return false when the framework starts running your AI. When the AI's time has run out,
-        /// then this method will return true. Once this method returns true, your AI should return a 
+        /// then this method will return true. Once this method returns true, your AI should return a
         /// move immediately.
-        /// 
+        ///
         /// You should NEVER EVER set this property!
         /// This property should be defined as an Automatic Property.
         /// This property SHOULD NOT CONTAIN ANY CODE!!!
@@ -650,7 +739,7 @@ namespace StudentAI
         /// <summary>
         /// Call this method to print out debug information. The framework subscribes to this event
         /// and will provide a log window for your debug messages.
-        /// 
+        ///
         /// You should NEVER EVER set this property!
         /// This property should be defined as an Automatic Property.
         /// This property SHOULD NOT CONTAIN ANY CODE!!!
@@ -661,7 +750,7 @@ namespace StudentAI
         /// <summary>
         /// Call this method to catch profiling information. The framework subscribes to this event
         /// and will print out the profiling stats in your log window.
-        /// 
+        ///
         /// You should NEVER EVER set this property!
         /// This property should be defined as an Automatic Property.
         /// This property SHOULD NOT CONTAIN ANY CODE!!!
@@ -672,7 +761,7 @@ namespace StudentAI
         /// <summary>
         /// Call this method to tell the framework what decision print out debug information. The framework subscribes to this event
         /// and will provide a debug window for your decision tree.
-        /// 
+        ///
         /// You should NEVER EVER set this property!
         /// This property should be defined as an Automatic Property.
         /// This property SHOULD NOT CONTAIN ANY CODE!!!
